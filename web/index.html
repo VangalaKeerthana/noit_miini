@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Noit Research Mini</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 950px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    input, button, textarea { padding: 8px; font-size: 14px; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1 }
+    pre { white-space: pre-wrap; word-wrap: break-word; background:#fafafa; padding:12px; border-radius:8px; border:1px solid #eee;}
+  </style>
+</head>
+<body>
+  <h1>Noit Research Mini</h1>
+  <div class="card">
+    <h3>Auth</h3>
+    <div class="row">
+      <input id="email" placeholder="email">
+      <input id="password" placeholder="password" type="password">
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button onclick="signup()">Sign up</button>
+      <button onclick="login()">Log in</button>
+      <button onclick="logout()">Log out</button>
+    </div>
+    <div>Token: <span id="tok"></span></div>
+  </div>
+
+  <div class="card">
+    <h3>Ask a question</h3>
+    <textarea id="q" rows="3" placeholder="e.g., Explain Apple's SMC/PMU and how it fits into macOS power management."></textarea>
+    <div class="row" style="margin-top:8px;">
+      <input id="model" placeholder="gpt-4o-mini (optional)">
+      <button onclick="ask()">Ask</button>
+      <button onclick="loadHistory()">Refresh history</button>
+    </div>
+    <div id="ans" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h3>History</h3>
+    <div id="hist"></div>
+  </div>
+
+<script>
+const API = "http://localhost:8000";
+
+function setToken(t) {
+  localStorage.setItem("token", t || "");
+  document.getElementById("tok").innerText = (t||"").slice(0,24) + (t? "..." : "");
+}
+setToken(localStorage.getItem("token") || "");
+
+async function signup() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const r = await fetch(API + "/signup", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email, password})
+  });
+  const j = await r.json();
+  if (r.ok) setToken(j.access_token); else alert(j.detail || "Signup failed");
+}
+
+async function login() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const r = await fetch(API + "/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email, password})
+  });
+  const j = await r.json();
+  if (r.ok) setToken(j.access_token); else alert(j.detail || "Login failed");
+}
+
+function logout() {
+  setToken("");
+  alert("Logged out");
+}
+
+async function ask() {
+  const query = document.getElementById("q").value.trim();
+  const model = document.getElementById("model").value.trim();
+  const token = localStorage.getItem("token") || "";
+  if (!token) return alert("Log in first");
+
+  const r = await fetch(API + "/query", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({query, model: model || undefined})
+  });
+  const j = await r.json();
+  if (r.ok) {
+    document.getElementById("ans").innerHTML = "<pre>"+(j.answer || "")+"</pre>";
+    loadHistory();
+  } else {
+    alert(j.detail || "Query failed");
+  }
+}
+
+async function loadHistory() {
+  const token = localStorage.getItem("token") || "";
+  if (!token) return;
+
+  const r = await fetch(API + "/history", {
+    headers: {"Authorization": "Bearer " + token}
+  });
+  const j = await r.json();
+  if (r.ok) {
+    const hist = document.getElementById("hist");
+    hist.innerHTML = "";
+    j.forEach(row => {
+      const div = document.createElement("div");
+      div.innerHTML = "<b>Q:</b> " + row.question + "<br/><b>A:</b> <pre>"+(row.answer||"")+"</pre><hr/>";
+      hist.appendChild(div);
+    });
+  }
+}
+loadHistory();
+</script>
+</body>
+</html>
